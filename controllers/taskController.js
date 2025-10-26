@@ -1,94 +1,68 @@
 const Task = require("../models/Task");
 
-// GET tasks (role-based)
+// Get all tasks
 exports.getTasks = async (req, res) => {
   try {
-    let tasks;
-    if (req.user.role === "admin") {
-      tasks = await Task.find();
-    } else {
-      tasks = await Task.find({
-        $or: [{ assignedTo: req.user.id }, { createdBy: req.user.id }],
-      });
-    }
-    res.status(200).json(tasks);
+    const tasks = await Task.find().sort({ createdAt: -1 });
+    res.json(tasks);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("getTasks error:", err);
+    res.status(500).json({ message: "Failed to fetch tasks", error: err.message });
   }
 };
 
-// CREATE task
+// Create new task
 exports.createTask = async (req, res) => {
   try {
-    let { name, priority, status, assignedTo, startDate, endDate, estimate } = req.body;
+    const { name, priority, status, assignedTo, startDate, endDate, estimate } = req.body;
 
-    const allowedStatus = ["Not Started","In Progress","Review","On Hold","Closed","Cancelled"];
-    const allowedPriority = ["High","Medium","Low"];
-
-    if (!allowedStatus.includes(status)) status = "Not Started";
-    if (!allowedPriority.includes(priority)) priority = "Medium";
-
-    if (!assignedTo || !name) {
-      return res.status(400).json({ message: "Task name and assignedTo are required" });
+    // Required fields check
+    if (!name || !assignedTo) {
+      return res.status(400).json({ message: "Task Name and Assigned To are required" });
     }
 
     const newTask = new Task({
       name,
-      priority,
-      status,
+      priority: priority || "Medium",
+      status: status || "Not Started",
       assignedTo,
-      startDate,
-      endDate,
-      estimate,
-      createdBy: req.user.id,
+      startDate: startDate ? new Date(startDate) : null,
+      endDate: endDate ? new Date(endDate) : null,
+      estimate: estimate || "",
+      createdBy: (req.user && (req.user.name || req.user.id)) || "Admin",
     });
 
-    await newTask.save();
-    res.status(201).json(newTask);
+    const savedTask = await newTask.save();
+    res.json(savedTask);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("createTask error:", err);
+    res.status(500).json({ message: "Failed to create task", error: err.message });
   }
 };
 
-// UPDATE task
+// Update task
 exports.updateTask = async (req, res) => {
   try {
     const task = await Task.findById(req.params.id);
     if (!task) return res.status(404).json({ message: "Task not found" });
 
-    if (req.user.role !== "admin" && task.createdBy.toString() !== req.user.id) {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-
-    let { name, priority, status, assignedTo, startDate, endDate, estimate } = req.body;
-
-    const allowedStatus = ["Not Started","In Progress","Review","On Hold","Closed","Cancelled"];
-    const allowedPriority = ["High","Medium","Low"];
-
-    if (!allowedStatus.includes(status)) status = "Not Started";
-    if (!allowedPriority.includes(priority)) priority = "Medium";
-
-    Object.assign(task, { name, priority, status, assignedTo, startDate, endDate, estimate });
-    await task.save();
-    res.json(task);
+    Object.assign(task, req.body);
+    const updatedTask = await task.save();
+    res.json(updatedTask);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("updateTask error:", err);
+    res.status(500).json({ message: "Failed to update task", error: err.message });
   }
 };
 
-// DELETE task
+// Delete task
 exports.deleteTask = async (req, res) => {
   try {
-    const task = await Task.findById(req.params.id);
-    if (!task) return res.status(404).json({ message: "Task not found" });
-
-    if (req.user.role !== "admin" && task.createdBy.toString() !== req.user.id) {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-
-    await task.deleteOne();
+    const deleted = await Task.findByIdAndDelete(req.params.id);
+    if (!deleted) return res.status(404).json({ message: "Task not found" });
     res.json({ message: "Task deleted" });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("deleteTask error:", err);
+    res.status(500).json({ message: "Failed to delete task", error: err.message });
   }
 };

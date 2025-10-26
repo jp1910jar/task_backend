@@ -1,26 +1,25 @@
 const mongoose = require("mongoose");
 
+// Remove cached model in dev
+// if (mongoose.models.Task) {
+//   delete mongoose.models.Task;
+// }
+
 const taskSchema = new mongoose.Schema(
   {
     name: { type: String, required: true },
-    priority: {
-      type: String,
-      enum: ["High", "Medium", "Low"],
-      default: "Medium",
-    },
-    status: {
-      type: String,
-      enum: ["Not Started", "In Progress", "Review", "On Hold", "Closed", "Cancelled"],
-      default: "Not Started",
+    priority: { type: String, default: "Medium" }, // free-text
+    status: { 
+      type: String, 
+      default: "Not Started" // any string is allowed
     },
     assignedTo: { type: String, required: true },
-    startDate: String,
-    endDate: String,
-    estimate: String,
-    createdBy: { type: String, required: true },
+    startDate: { type: Date },
+    endDate: { type: Date },
+    estimate: { type: String },
+    createdBy: { type: String, default: "Admin" },
   },
   { timestamps: true }
 );
 
-// ✅ Prevent OverwriteModelError
-module.exports = mongoose.models.Task || mongoose.model("Task", taskSchema);
+module.exports = mongoose.model("Task", taskSchema);
