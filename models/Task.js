@@ -1,9 +1,9 @@
 const mongoose = require("mongoose");
 
 // Remove cached model in dev
-// if (mongoose.models.Task) {
-//   delete mongoose.models.Task;
-// }
+if (mongoose.models.Task) {
+  delete mongoose.models.Task;
+}
 
 const taskSchema = new mongoose.Schema(
   {
