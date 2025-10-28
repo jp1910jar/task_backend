@@ -8,18 +8,28 @@ dotenv.config();
 
 const app = express();
 app.use(express.json());
-app.use(cors());
+
+// ✅ Use only this single CORS setup
+app.use(
+  cors({
+    origin: "http://localhost:5173", // your React frontend port
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 
 // Routes
 app.use("/api/auth", require("./routes/authRoutes"));
-app.use("/api/workspaces", require("./routes/workspaceRoutes"));
 app.use("/api/members", require("./routes/memberRoutes"));
 app.use("/api/tasks", require("./routes/taskRoutes"));
+const workgroupRoutes = require("./routes/workgroupRoutes");
+app.use("/api/workgroups", workgroupRoutes);
 
 // MongoDB connection
-mongoose.connect(process.env.MONGO_URI, {
-  dbName: "ProjectManagement",
-})
+mongoose
+  .connect(process.env.MONGO_URI, {
+    dbName: "ProjectManagement",
+  })
   .then(async () => {
     console.log("MongoDB connected");
 
