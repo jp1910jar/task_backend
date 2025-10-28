@@ -1,9 +1,22 @@
 const Task = require("../models/Task");
 
-// Get all tasks
+// Get tasks (Admin sees all; user sees their own or assigned)
 exports.getTasks = async (req, res) => {
   try {
-    const tasks = await Task.find().sort({ createdAt: -1 });
+    let query = {};
+
+    if (req.user.role !== "admin") {
+      // Normal user: show tasks assigned to them OR created by them
+      const userIdentifier = req.user.email || req.user.name || req.user.id;
+      query = {
+        $or: [
+          { assignedTo: userIdentifier },
+          { createdBy: userIdentifier }
+        ]
+      };
+    }
+
+    const tasks = await Task.find(query).sort({ createdAt: -1 });
     res.json(tasks);
   } catch (err) {
     console.error("getTasks error:", err);
@@ -16,10 +29,11 @@ exports.createTask = async (req, res) => {
   try {
     const { name, priority, status, assignedTo, startDate, endDate, estimate } = req.body;
 
-    // Required fields check
     if (!name || !assignedTo) {
       return res.status(400).json({ message: "Task Name and Assigned To are required" });
     }
+
+    const createdBy = req.user?.email || req.user?.name || "Admin";
 
     const newTask = new Task({
       name,
@@ -29,7 +43,7 @@ exports.createTask = async (req, res) => {
       startDate: startDate ? new Date(startDate) : null,
       endDate: endDate ? new Date(endDate) : null,
       estimate: estimate || "",
-      createdBy: (req.user && (req.user.name || req.user.id)) || "Admin",
+      createdBy,
     });
 
     const savedTask = await newTask.save();
@@ -46,6 +60,14 @@ exports.updateTask = async (req, res) => {
     const task = await Task.findById(req.params.id);
     if (!task) return res.status(404).json({ message: "Task not found" });
 
+    // Optional: Prevent normal users from editing others’ tasks
+    if (req.user.role !== "admin") {
+      const userIdentifier = req.user.email || req.user.name;
+      if (task.createdBy !== userIdentifier && task.assignedTo !== userIdentifier) {
+        return res.status(403).json({ message: "Not authorized to edit this task" });
+      }
+    }
+
     Object.assign(task, req.body);
     const updatedTask = await task.save();
     res.json(updatedTask);
@@ -58,9 +80,19 @@ exports.updateTask = async (req, res) => {
 // Delete task
 exports.deleteTask = async (req, res) => {
   try {
-    const deleted = await Task.findByIdAndDelete(req.params.id);
-    if (!deleted) return res.status(404).json({ message: "Task not found" });
-    res.json({ message: "Task deleted" });
+    const task = await Task.findById(req.params.id);
+    if (!task) return res.status(404).json({ message: "Task not found" });
+
+    // Optional: Restrict deletion rights
+    if (req.user.role !== "admin") {
+      const userIdentifier = req.user.email || req.user.name;
+      if (task.createdBy !== userIdentifier) {
+        return res.status(403).json({ message: "Not authorized to delete this task" });
+      }
+    }
+
+    await Task.findByIdAndDelete(req.params.id);
+    res.json({ message: "Task deleted successfully" });
   } catch (err) {
     console.error("deleteTask error:", err);
     res.status(500).json({ message: "Failed to delete task", error: err.message });
