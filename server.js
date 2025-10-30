@@ -5,31 +5,30 @@ const cors = require("cors");
 const bcrypt = require("bcryptjs");
 
 dotenv.config();
-
 const app = express();
-app.use(express.json());
 
-// ✅ Use only this single CORS setup
+// ✅ Always enable CORS BEFORE routes
 app.use(
   cors({
-    origin: "http://localhost:5173", // your React frontend port
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    origin: "http://localhost:5173",
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
-// Routes
+// ✅ Enable JSON parsing
+app.use(express.json());
+
+// ✅ Routes
 app.use("/api/auth", require("./routes/authRoutes"));
 app.use("/api/members", require("./routes/memberRoutes"));
 app.use("/api/tasks", require("./routes/taskRoutes"));
-const workgroupRoutes = require("./routes/workgroupRoutes");
-app.use("/api/workgroups", workgroupRoutes);
+app.use("/api/workgroups", require("./routes/workgroupRoutes"));
+app.use("/api/project-tasks", require("./routes/ProjecttaskRoutes")); // only once!
 
-// MongoDB connection
+// ✅ MongoDB connection
 mongoose
-  .connect(process.env.MONGO_URI, {
-    dbName: "ProjectManagement",
-  })
+  .connect(process.env.MONGO_URI, { dbName: "ProjectManagement" })
   .then(async () => {
     console.log("MongoDB connected");
 
@@ -44,10 +43,10 @@ mongoose
         password: hashedPassword,
         role: "admin",
       }).save();
-      console.log("Admin created");
+      console.log("✅ Admin created");
     }
   })
   .catch((err) => console.log("MongoDB error:", err));
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
