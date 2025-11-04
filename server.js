@@ -25,6 +25,9 @@ app.use("/api/members", require("./routes/memberRoutes"));
 app.use("/api/tasks", require("./routes/taskRoutes"));
 app.use("/api/workgroups", require("./routes/workgroupRoutes"));
 app.use("/api/project-tasks", require("./routes/ProjecttaskRoutes")); // only once!
+const dashboardRoutes = require("./routes/dashboardRoutes");
+app.use("/api/dashboard", dashboardRoutes);
+
 
 // ✅ MongoDB connection
 mongoose
