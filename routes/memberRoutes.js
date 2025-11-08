@@ -2,7 +2,6 @@ const express = require("express");
 const router = express.Router();
 const memberController = require("../controllers/memberController");
 
-// CRUD
 router.get("/", memberController.getMembers);
 router.post("/", memberController.createMember);
 router.put("/:id", memberController.updateMember);
