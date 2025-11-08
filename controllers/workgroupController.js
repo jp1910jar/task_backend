@@ -82,3 +82,26 @@ exports.createWorkspace = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+// ✅ NEW — Get a single workspace by its ID (for ProjectTask header)
+exports.getWorkspaceById = async (req, res) => {
+  try {
+    const workspaceId = req.params.workspaceId;
+
+    // Find the workgroup that contains this workspace
+    const workgroup = await Workgroup.findOne(
+      { "workspaces._id": workspaceId },
+      { "workspaces.$": 1 }
+    );
+
+    if (!workgroup) {
+      return res.status(404).json({ message: "Workspace not found" });
+    }
+
+    const workspace = workgroup.workspaces[0];
+    res.json(workspace);
+  } catch (err) {
+    console.error("Error fetching workspace:", err);
+    res.status(500).json({ message: "Server error fetching workspace" });
+  }
+};
