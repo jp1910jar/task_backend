@@ -1,107 +1,147 @@
 const Workgroup = require("../models/Workgroup");
-const User = require("../models/User");
+const Member = require("../models/Member");
 
-// ✅ Get all workgroups
+/**
+ * ✅ Helper: Convert selected MongoDB _id to stable memberId
+ */
+const normalizeMemberIds = async (selectedIds = []) => {
+  const memberIds = [];
+  for (const id of selectedIds) {
+    const member = await Member.findById(id);
+    if (member) memberIds.push(member.memberId);
+  }
+  return memberIds;
+};
+
+/**
+ * ✅ Get all workgroups visible to logged-in user
+ */
 exports.getWorkgroups = async (req, res) => {
   try {
-    const workgroups = await Workgroup.find()
-      .populate("members", "name email")
-      .populate("workspaces.members", "name email");
-    res.json(workgroups);
+    const user = await Member.findOne({ email: req.user.email });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    const workgroups = await Workgroup.find({
+      $or: [
+        { createdBy: user.memberId },
+        { members: user.memberId }
+      ],
+    }).lean();
+
+    const workgroupsWithMembers = await Promise.all(
+      workgroups.map(async wg => {
+        const memberDocs = await Member.find({ memberId: { $in: wg.members } }, "name email phone role");
+        return { ...wg, members: memberDocs };
+      })
+    );
+
+    res.status(200).json(workgroupsWithMembers);
   } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
-
-// ✅ Get a single workgroup by ID
-exports.getWorkgroupById = async (req, res) => {
-  try {
-    const workgroup = await Workgroup.findById(req.params.id)
-      .populate("members", "name email")
-      .populate("workspaces.members", "name email");
-
-    if (!workgroup) return res.status(404).json({ message: "Workgroup not found" });
-    res.json(workgroup);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
-
-// ✅ Create a new workgroup
-exports.createWorkgroup = async (req, res) => {
-  try {
-    const { name, description, members } = req.body;
-    const newGroup = new Workgroup({ name, description, members });
-    await newGroup.save();
-    res.status(201).json(newGroup);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
-
-// ✅ Update workgroup members
-exports.updateWorkgroupMembers = async (req, res) => {
-  try {
-    const { workgroupId, members } = req.body;
-    const updated = await Workgroup.findByIdAndUpdate(
-      workgroupId,
-      { members },
-      { new: true }
-    ).populate("members", "name email");
-
-    if (!updated) return res.status(404).json({ message: "Workgroup not found" });
-    res.json(updated);
-  } catch (err) {
-    res.status(500).json({ message: err.message });
-  }
-};
-
-// ✅ Create workspace inside a workgroup
-exports.createWorkspace = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { name, description, members } = req.body;
-
-    const workgroup = await Workgroup.findById(id);
-    if (!workgroup) return res.status(404).json({ message: "Workgroup not found" });
-
-    const newWorkspace = {
-      name,
-      description,
-      members: members || [],
-      createdAt: new Date(),
-    };
-
-    if (!workgroup.workspaces) workgroup.workspaces = [];
-    workgroup.workspaces.push(newWorkspace);
-
-    await workgroup.save();
-    res.status(201).json(workgroup);
-  } catch (err) {
-    console.error("Error creating workspace:", err);
+    console.error("getWorkgroups error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
-// ✅ NEW — Get a single workspace by its ID (for ProjectTask header)
-exports.getWorkspaceById = async (req, res) => {
+/**
+ * ✅ Get single workgroup by ID
+ */
+exports.getWorkgroupById = async (req, res) => {
   try {
-    const workspaceId = req.params.workspaceId;
+    const { id } = req.params;
+    const user = await Member.findOne({ email: req.user.email });
+    if (!user) return res.status(404).json({ message: "User not found" });
 
-    // Find the workgroup that contains this workspace
-    const workgroup = await Workgroup.findOne(
-      { "workspaces._id": workspaceId },
-      { "workspaces.$": 1 }
-    );
+    const workgroup = await Workgroup.findById(id).lean();
+    if (!workgroup) return res.status(404).json({ message: "Workgroup not found" });
 
-    if (!workgroup) {
-      return res.status(404).json({ message: "Workspace not found" });
+    if (workgroup.createdBy !== user.memberId && !workgroup.members.includes(user.memberId)) {
+      return res.status(403).json({ message: "Access denied" });
     }
 
-    const workspace = workgroup.workspaces[0];
-    res.json(workspace);
+    const memberDocs = await Member.find({ memberId: { $in: workgroup.members } }, "name email phone role");
+    res.status(200).json({ ...workgroup, members: memberDocs });
   } catch (err) {
-    console.error("Error fetching workspace:", err);
-    res.status(500).json({ message: "Server error fetching workspace" });
+    console.error("getWorkgroupById error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+/**
+ * ✅ Create a new workgroup
+ */
+exports.createWorkgroup = async (req, res) => {
+  try {
+    const { name, description, members = [] } = req.body;
+
+    const normalizedMemberIds = await normalizeMemberIds(members);
+    const creator = await Member.findOne({ email: req.user.email });
+    if (!creator) return res.status(404).json({ message: "User not found" });
+
+    const newWorkgroup = new Workgroup({
+      name,
+      description,
+      members: normalizedMemberIds,
+      createdBy: creator.memberId,
+    });
+
+    await newWorkgroup.save();
+    res.status(201).json(newWorkgroup);
+  } catch (err) {
+    console.error("createWorkgroup error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+/**
+ * ✅ Update workgroup members
+ */
+exports.updateWorkgroupMembers = async (req, res) => {
+  try {
+    const { id, members } = req.body;
+    const normalizedMemberIds = await normalizeMemberIds(members);
+
+    const workgroup = await Workgroup.findById(id);
+    if (!workgroup) return res.status(404).json({ message: "Workgroup not found" });
+
+    workgroup.members = normalizedMemberIds;
+    await workgroup.save();
+
+    res.status(200).json(workgroup);
+  } catch (err) {
+    console.error("updateWorkgroupMembers error:", err);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+/**
+ * ✅ Create workspace inside a workgroup
+ */
+exports.createWorkspace = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, description, members = [] } = req.body;
+
+    const normalizedMemberIds = await normalizeMemberIds(members);
+
+    const workgroup = await Workgroup.findById(id);
+    if (!workgroup) return res.status(404).json({ message: "Workgroup not found" });
+
+    const creator = await Member.findOne({ email: req.user.email });
+    if (!creator) return res.status(404).json({ message: "User not found" });
+
+    const workspace = {
+      name,
+      description,
+      members: normalizedMemberIds,
+      createdBy: creator.memberId,
+    };
+
+    workgroup.workspaces.push(workspace);
+    await workgroup.save();
+
+    res.status(201).json(workspace);
+  } catch (err) {
+    console.error("createWorkspace error:", err);
+    res.status(500).json({ message: "Server error" });
   }
 };
