@@ -1,16 +1,18 @@
 const express = require("express");
 const router = express.Router();
-const auth = require("../middleware/auth");
 const {
   getWorkgroups,
   getWorkgroupById,
   createWorkgroup,
-  createWorkspace
+  updateWorkgroupMembers,
+  createWorkspace,
 } = require("../controllers/workgroupController");
 
-router.get("/", auth, getWorkgroups);
-router.get("/:id", auth, getWorkgroupById);
-router.post("/", auth, createWorkgroup);
-router.post("/:id/workspaces", auth, createWorkspace);
+// Routes
+router.get("/", getWorkgroups);
+router.get("/:id", getWorkgroupById);
+router.post("/", createWorkgroup);
+router.put("/update-members", updateWorkgroupMembers);
+router.post("/:id/workspaces", createWorkspace); // ✅ important new route
 
 module.exports = router;
