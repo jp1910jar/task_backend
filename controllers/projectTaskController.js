@@ -1,5 +1,6 @@
 // controllers/projectTaskController.js
 const ProjectTask = require("../models/ProjectTask");
+const Workgroup = require("../models/Workgroup"); // your workgroup model
 
 // ✅ Create Project Task
 exports.createProjectTask = async (req, res) => {
@@ -9,28 +10,50 @@ exports.createProjectTask = async (req, res) => {
       priority,
       status,
       estimate,
+      actualHours,
       startDate,
       endDate,
       createdBy,
       workspaceId,
     } = req.body;
 
-    if (!taskName || !workspaceId) {
-      return res.status(400).json({ message: "taskName and workspaceId are required." });
+    if (!taskName || !workspaceId || !createdBy) {
+      return res
+        .status(400)
+        .json({ message: "taskName, workspaceId, and createdBy are required." });
     }
 
-    // ✅ Auto-generate unique projectId
-    const lastTask = await ProjectTask.findOne().sort({ createdAt: -1 });
-    const nextId = lastTask
-      ? `PRJ-${String(parseInt(lastTask.projectId.split("-")[1]) + 1).padStart(3, "0")}`
-      : "PRJ-001";
+    // 🔹 Find workspace inside workgroups
+    const workgroup = await Workgroup.findOne({ "workspaces._id": workspaceId });
+    if (!workgroup) return res.status(404).json({ message: "Workspace not found" });
 
+    // 🔹 Get workspace name for projectId
+    const workspace = workgroup.workspaces.id(workspaceId);
+    const workspaceName = workspace.name.replace(/\s+/g, "-"); // remove spaces for ID
+
+    // 🔹 Generate sequential projectId like workspaceName-001
+    const lastTask = await ProjectTask.find({ workspaceId })
+      .sort({ createdAt: -1 })
+      .limit(1);
+
+    let nextNumber = 1;
+    if (lastTask.length > 0) {
+      const lastId = lastTask[0].projectId;
+      const parts = lastId.split("-");
+      const numPart = parseInt(parts[parts.length - 1]);
+      if (!isNaN(numPart)) nextNumber = numPart + 1;
+    }
+
+    const projectId = `${workspaceName}-${String(nextNumber).padStart(3, "0")}`;
+
+    // 🔹 Create new project task
     const newTask = new ProjectTask({
-      projectId: nextId,
+      projectId,
       taskName,
       priority,
       status,
       estimate,
+      actualHours,
       startDate,
       endDate,
       createdBy,
@@ -41,7 +64,7 @@ exports.createProjectTask = async (req, res) => {
     res.status(201).json(newTask);
   } catch (err) {
     console.error("Error creating project task:", err);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 };
 
