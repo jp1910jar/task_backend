@@ -36,17 +36,35 @@ mongoose
     console.log("MongoDB connected");
 
     const User = require("./models/User");
-    const adminEmail = "jitendrabuddha@gmail.com";
-    const adminExists = await User.findOne({ email: adminEmail });
-    if (!adminExists) {
+
+    // -------- SEED ADMIN 1 --------
+    const adminEmail1 = "jitendrabuddha@gmail.com";
+    const admin1Exists = await User.findOne({ email: adminEmail1 });
+
+    if (!admin1Exists) {
       const hashedPassword = await bcrypt.hash("987654321_j", 10);
       await new User({
         username: "jitendrabuddha",
-        email: adminEmail,
+        email: adminEmail1,
         password: hashedPassword,
         role: "admin",
       }).save();
-      console.log("✅ Admin created");
+      console.log("⚡ Admin (jitendrabuddha) created");
+    }
+
+    // -------- SEED ADMIN 2 --------
+    const adminEmail2 = "admin21@gmail.com";
+    const admin2Exists = await User.findOne({ email: adminEmail2 });
+
+    if (!admin2Exists) {
+      const hashedPassword2 = await bcrypt.hash("admin12345678_a", 10);
+      await new User({
+        username: "admin2",
+        email: adminEmail2,
+        password: hashedPassword2,
+        role: "admin",
+      }).save();
+      console.log("⚡ Admin (admin2) created");
     }
   })
   .catch((err) => console.log("MongoDB error:", err));
